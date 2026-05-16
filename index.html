@@ -279,12 +279,16 @@ function useWebSocket() {
 }
 
 // === 顶部栏组件 ===
-function TopBar({ wsConnected, scopeConnected, scopeInfo, scanning, showScan, setShowScan, devices, send, presets, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad }) {
+function TopBar({ wsConnected, scopeConnected, scopeInfo, scanning, showScan, setShowScan, devices, send, presets, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad, testMode, setTestMode }) {
   return h("div", { className: "topbar" },
     h("span", { className: "brand" }, "SCOPE"),
     h("span", { className: "status-dot" + (scopeConnected ? " connected" : ""), title: scopeConnected ? "已连接" : "未连接" }),
     h("span", { className: "dev-info" }, scopeConnected ? (scopeInfo?.idn || scopeInfo?.ip) : "未连接"),
     h("span", { className: "spacer" }),
+    h("button", {
+      onClick: () => setTestMode(!testMode),
+      style: testMode ? { background: "var(--success)", borderColor: "var(--success)", color: "#000" } : {}
+    }, testMode ? "模拟ON" : "模拟"),
     h("button", { onClick: () => { send({ type: "scan" }); setShowScan(true); } }, "扫描"),
     h("button", { onClick: () => send({ type: "capture" }), disabled: !scopeConnected }, "截图"),
     h("button", { onClick: () => setShowPresetSave(true), disabled: !scopeConnected }, "保存"),
@@ -495,13 +499,13 @@ function Sidebar({ scopeConnected, channels, setChannels, timebase, setTimebase,
 }
 
 // === 波形显示区 ===
-function WaveformArea({ scopeConnected, send, on }) {
+function WaveformArea({ scopeConnected, send, on, testMode }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
-  const waveDataRef = useRef({ 1: { x: [], y: [] }, 2: { x: [], y: [] }, 3: { x: [], y: [] }, 4: { x: [], y: [] } });
   const fpsRef = useRef(0);
   const lastFrameRef = useRef(Date.now());
   const pollingRef = useRef(null);
+  const phaseRef = useRef(0);
 
   // 初始化 ECharts
   useEffect(() => {
@@ -513,12 +517,14 @@ function WaveformArea({ scopeConnected, send, on }) {
       grid: { left: 60, right: 16, top: 12, bottom: 40 },
       xAxis: {
         type: "value",
+        min: -0.005, max: 0.005,
         axisLine: { lineStyle: { color: "#30363d" } },
         axisLabel: { color: "#8b949e", fontSize: 10, formatter: (v) => formatEng(v, "s") },
         splitLine: { lineStyle: { color: "#161b22" } },
       },
       yAxis: {
         type: "value",
+        min: -3, max: 3,
         axisLine: { lineStyle: { color: "#30363d" } },
         axisLabel: { color: "#8b949e", fontSize: 10 },
         splitLine: { lineStyle: { color: "#161b22" } },
@@ -540,40 +546,76 @@ function WaveformArea({ scopeConnected, send, on }) {
     };
   }, []);
 
-  // 监听波形数据
+  // 本地生成模拟波形
+  function genMock(ch, dt) {
+    const n = 500;
+    const t0 = -0.005, t1 = 0.005;
+    const data = [];
+    const phase = phaseRef.current;
+    for (let i = 0; i < n; i++) {
+      const t = t0 + (t1 - t0) * i / n;
+      let y;
+      if (ch === 1) y = Math.sin(2 * Math.PI * 1000 * t + phase) * 2.5;
+      else if (ch === 2) y = Math.cos(2 * Math.PI * 500 * t + phase * 0.7) * 1.5;
+      else if (ch === 3) y = Math.sin(2 * Math.PI * 2000 * t + phase * 1.3) * 1.0;
+      else y = (Math.random() - 0.5) * 0.2;
+      data.push([t, y]);
+    }
+    return data;
+  }
+
+  // 模拟轮询
   useEffect(() => {
+    if (!testMode) return;
+    phaseRef.current = 0;
+    let frameIdx = 0;
+    const tick = () => {
+      phaseRef.current = frameIdx * 0.08;
+      if (chartInstance.current) {
+        chartInstance.current.setOption({
+          series: [
+            { id: 0, data: genMock(1, phaseRef.current) },
+            { id: 1, data: genMock(2, phaseRef.current) },
+          ],
+        }, { replaceMerge: ["series"] });
+        const now = Date.now();
+        fpsRef.current = Math.round(1000 / (now - lastFrameRef.current));
+        lastFrameRef.current = now;
+      }
+      frameIdx++;
+    };
+    tick();
+    pollingRef.current = setInterval(tick, 100);
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [testMode]);
+
+  // 监听后端波形数据（非模拟模式）
+  useEffect(() => {
+    if (testMode) return;
     const unsubs = [];
     unsubs.push(on("waveform_data", (msg) => {
-      if (msg.x && msg.y) {
-        const data = msg.x.map((xi, i) => [xi, msg.y[i]]);
-        waveDataRef.current[msg.channel] = { x: msg.x, y: msg.y };
-        if (chartInstance.current) {
-          chartInstance.current.setOption({
-            series: [{ id: msg.channel - 1, data }],
-          }, { replaceMerge: ["series"] });
-        }
-        // FPS 计算
+      if (msg.x && msg.y && chartInstance.current) {
+        chartInstance.current.setOption({
+          series: [{ id: msg.channel - 1, data: msg.x.map((xi, i) => [xi, msg.y[i]]) }],
+        }, { replaceMerge: ["series"] });
         const now = Date.now();
         fpsRef.current = Math.round(1000 / (now - lastFrameRef.current));
         lastFrameRef.current = now;
       }
     }));
     return () => unsubs.forEach(fn => fn());
-  }, [on]);
+  }, [on, testMode]);
 
-  // 波形轮询（连接后始终轮询，后端做 mock 降级）
+  // 非模拟模式：从后端轮询波形
   useEffect(() => {
+    if (testMode) return;
     const fetchWave = () => {
-      [1, 2].forEach(ch => {
-        send({ type: "waveform", channel: ch });
-      });
+      [1, 2].forEach(ch => send({ type: "waveform", channel: ch }));
     };
     fetchWave();
     pollingRef.current = setInterval(fetchWave, 100);
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [send]);
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [send, testMode]);
 
   return h("div", { className: "waveform-area" },
     h("div", { id: "chart", style: { width: "100%", height: "100%" } })
@@ -612,6 +654,7 @@ function App() {
   const [showPresetSave, setShowPresetSave] = useState(false);
   const [showPresetLoad, setShowPresetLoad] = useState(false);
   const [fps, setFps] = useState(0);
+  const [testMode, setTestMode] = useState(true);
   const [channels, setChannels] = useState({
     1: { on: true, scale: 1.0, offset: 0 },
     2: { on: true, scale: 1.0, offset: 0 },
@@ -635,10 +678,10 @@ function App() {
 
   // HTML 渲染（后续任务逐步完善）
   return h("div", null,
-    h(TopBar, { wsConnected, scopeConnected, scopeInfo, scanning, showScan, setShowScan, devices, send, presets, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad }),
+    h(TopBar, { wsConnected, scopeConnected, scopeInfo, scanning, showScan, setShowScan, devices, send, presets, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad, testMode, setTestMode }),
     h("div", { className: "main" },
       h(Sidebar, { scopeConnected, channels, setChannels, timebase, setTimebase, trigger, setTrigger, measurements, presets, send, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad }),
-      h(WaveformArea, { scopeConnected, send, on })
+      h(WaveformArea, { wsConnected, scopeConnected, send, on, testMode })
     ),
     h(BottomBar, { wsConnected, scopeConnected, fps })
   );

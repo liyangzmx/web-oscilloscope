@@ -479,7 +479,21 @@ async def reconnect_task():
                 await broadcast({"type": "connected", "ip": scope_ip, "idn": info})
 
 
-if __name__ == "__main__":
+async def on_startup(_app):
+    asyncio.create_task(reconnect_task())
+
+
+async def main():
     print(f"示波器控制服务启动: http://localhost:{PORT}")
-    app.on_startup.append(lambda _: asyncio.create_task(reconnect_task()))
-    web.run_app(app, host=HOST, port=PORT)
+    app.on_startup.append(on_startup)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, HOST, PORT)
+    await site.start()
+    print(f"服务已就绪，端口 {PORT} 监听中")
+    # 永久保持运行
+    await asyncio.Event().wait()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
