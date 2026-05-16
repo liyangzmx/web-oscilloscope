@@ -187,7 +187,93 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 
 <script>
-// React 应用将在后续任务中在此处实现
+const { useState, useEffect, useCallback, useRef, createElement: h } = React;
+
+// === WebSocket Hook ===
+function useWebSocket() {
+  const [ws, setWs] = useState(null);
+  const [connected, setConnected] = useState(false);
+  const [scopeConnected, setScopeConnected] = useState(false);
+  const [scopeInfo, setScopeInfo] = useState(null);
+  const [error, setError] = useState("");
+  const listenersRef = useRef({});
+
+  useEffect(() => {
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${location.host}/ws`);
+    socket.onopen = () => setConnected(true);
+    socket.onclose = () => setConnected(false);
+    socket.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      const handlers = listenersRef.current[msg.type];
+      if (handlers) handlers.forEach(fn => fn(msg));
+    };
+    setWs(socket);
+    return () => socket.close();
+  }, []);
+
+  const send = useCallback((data) => {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+  }, [ws]);
+
+  const on = useCallback((type, fn) => {
+    if (!listenersRef.current[type]) listenersRef.current[type] = [];
+    listenersRef.current[type].push(fn);
+    return () => {
+      listenersRef.current[type] = listenersRef.current[type].filter(f => f !== fn);
+    };
+  }, []);
+
+  return { send, on, connected, scopeConnected, scopeInfo, error, setScopeConnected, setScopeInfo, setError };
+}
+
+// === App 组件 ===
+function App() {
+  const {
+    send, on, connected: wsConnected,
+    scopeConnected, setScopeConnected, scopeInfo, setScopeInfo
+  } = useWebSocket();
+  const [devices, setDevices] = useState([]);
+  const [scanning, setScanning] = useState(false);
+  const [showScan, setShowScan] = useState(false);
+  const [measurements, setMeasurements] = useState({});
+  const [presets, setPresets] = useState([]);
+  const [showPresetSave, setShowPresetSave] = useState(false);
+  const [showPresetLoad, setShowPresetLoad] = useState(false);
+  const [fps, setFps] = useState(0);
+  const [channels, setChannels] = useState({
+    1: { on: true, scale: 1.0, offset: 0 },
+    2: { on: true, scale: 1.0, offset: 0 },
+    3: { on: false, scale: 1.0, offset: 0 },
+    4: { on: false, scale: 1.0, offset: 0 },
+  });
+  const [timebase, setTimebase] = useState({ scale: 1e-3, offset: 0 });
+  const [trigger, setTrigger] = useState({ level: 0, mode: "EDGE", source: "CHAN1" });
+
+  // 监听后端消息
+  useEffect(() => {
+    const unsubs = [];
+    unsubs.push(on("connected", (m) => { setScopeConnected(true); setScopeInfo(m); }));
+    unsubs.push(on("disconnected", () => { setScopeConnected(false); setScopeInfo(null); }));
+    unsubs.push(on("scan_done", (m) => { setDevices(m.devices); setScanning(false); }));
+    unsubs.push(on("measure", setMeasurements));
+    unsubs.push(on("preset_list", (m) => setPresets(m.presets)));
+    unsubs.push(on("error", (m) => { /* 错误静默记录在底部栏 */ }));
+    return () => unsubs.forEach(fn => fn());
+  }, [on]);
+
+  // HTML 渲染（后续任务逐步完善）
+  return h("div", null,
+    h(TopBar, { wsConnected, scopeConnected, scopeInfo, scanning, showScan, setShowScan, devices, send, presets, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad }),
+    h("div", { className: "main" },
+      h(Sidebar, { scopeConnected, channels, setChannels, timebase, setTimebase, trigger, setTrigger, measurements, presets, send, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad }),
+      h(WaveformArea, { scopeConnected, send, on })
+    ),
+    h(BottomBar, { wsConnected, scopeConnected, fps })
+  );
+}
+
+ReactDOM.render(h(App), document.getElementById("root"));
 </script>
 </body>
 </html>
