@@ -290,6 +290,118 @@ function PresetLoadModal({ presets, send, setShow }) {
   );
 }
 
+// === 侧边栏组件 ===
+const CH_COLORS = { 1: "var(--ch1)", 2: "var(--ch2)", 3: "var(--ch3)", 4: "var(--ch4)" };
+
+function Sidebar({ scopeConnected, channels, setChannels, timebase, setTimebase, trigger, setTrigger, measurements, presets, send }) {
+  const updateChannel = (ch, key, value) => {
+    setChannels(prev => ({ ...prev, [ch]: { ...prev[ch], [key]: value } }));
+    if (scopeConnected) {
+      let cmd = "";
+      if (key === "on") cmd = `:CHANnel${ch}:DISPlay ${value ? "ON" : "OFF"}`;
+      else if (key === "scale") cmd = `:CHANnel${ch}:SCALe ${value}`;
+      else if (key === "offset") cmd = `:CHANnel${ch}:OFFSet ${value}`;
+      send({ type: "scpi", command: cmd });
+    }
+  };
+
+  const updateTimebase = (key, value) => {
+    setTimebase(prev => ({ ...prev, [key]: value }));
+    if (scopeConnected) send({ type: "scpi", command: `:TIMebase:${key.toUpperCase()} ${value}` });
+  };
+
+  const updateTrigger = (key, value) => {
+    setTrigger(prev => ({ ...prev, [key]: value }));
+    if (scopeConnected) {
+      const cmdKey = key === "level" ? "LEVel" : key.toUpperCase();
+      send({ type: "scpi", command: `:TRIGger:${cmdKey} ${value}` });
+    }
+  };
+
+  const formatVal = (v) => {
+    if (v === null || v === undefined) return "--";
+    if (typeof v === "number") {
+      if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(3) + "M";
+      if (Math.abs(v) >= 1e3) return (v / 1e3).toFixed(2) + "k";
+      if (Math.abs(v) < 1e-3 && v !== 0) return (v * 1e6).toFixed(1) + "u";
+      return Number(v.toPrecision(4)).toString();
+    }
+    return v;
+  };
+
+  return h("div", { className: "sidebar" },
+    // 通道控制
+    ...[1, 2, 3, 4].map(ch =>
+      h("div", { className: "panel", key: `ch${ch}` },
+        h("div", { className: "panel-title", style: { color: CH_COLORS[ch] } }, `通道 ${ch}`),
+        h("div", { className: "ch-toggle" },
+          h("span", null, "开关"),
+          h("button", {
+            className: channels[ch].on ? `on ch${ch}` : "",
+            onClick: () => updateChannel(ch, "on", !channels[ch].on)
+          }, channels[ch].on ? "ON" : "OFF")
+        ),
+        h("label", null, "垂直档位 (V/div)"),
+        h("select", { value: channels[ch].scale, onChange: (e) => updateChannel(ch, "scale", parseFloat(e.target.value)) },
+          ["0.001", "0.002", "0.005", "0.01", "0.02", "0.05", "0.1", "0.2", "0.5", "1", "2", "5", "10"].map(v =>
+            h("option", { key: v, value: v }, v + " V")
+          )
+        ),
+        h("label", null, "偏置 (V)"),
+        h("input", { type: "number", step: 0.01, value: channels[ch].offset, onChange: (e) => updateChannel(ch, "offset", parseFloat(e.target.value) || 0) })
+      )
+    ),
+
+    // 时基控制
+    h("div", { className: "panel" },
+      h("div", { className: "panel-title" }, "时基"),
+      h("label", null, "时间档位 (s/div)"),
+      h("select", { value: timebase.scale, onChange: (e) => updateTimebase("scale", parseFloat(e.target.value)) },
+        ["1e-9", "2e-9", "5e-9", "1e-8", "2e-8", "5e-8", "1e-7", "2e-7", "5e-7",
+         "1e-6", "2e-6", "5e-6", "1e-5", "2e-5", "5e-5", "1e-4", "2e-4", "5e-4",
+         "1e-3", "2e-3", "5e-3", "1e-2", "2e-2", "5e-2", "1e-1", "2e-1", "5e-1", "1"].map(v =>
+          h("option", { key: v, value: v }, formatVal(parseFloat(v)) + "s")
+        )
+      ),
+      h("label", null, "水平偏移 (s)"),
+      h("input", { type: "number", step: 1e-6, value: timebase.offset, onChange: (e) => updateTimebase("offset", parseFloat(e.target.value) || 0) })
+    ),
+
+    // 触发控制
+    h("div", { className: "panel" },
+      h("div", { className: "panel-title" }, "触发"),
+      h("label", null, "触发电平 (V)"),
+      h("input", { type: "number", step: 0.01, value: trigger.level, onChange: (e) => updateTrigger("level", parseFloat(e.target.value) || 0) }),
+      h("label", null, "触发模式"),
+      h("select", { value: trigger.mode, onChange: (e) => updateTrigger("mode", e.target.value) },
+        ["EDGE", "GLITch", "PATTern", "TV", "DELay", "EBURst", "OR", "SHOLd", "SBUS"].map(v =>
+          h("option", { key: v, value: v }, v)
+        )
+      ),
+      h("label", null, "触发源"),
+      h("select", { value: trigger.source, onChange: (e) => updateTrigger("source", e.target.value) },
+        ["CHAN1", "CHAN2", "CHAN3", "CHAN4", "EXT", "LINE", "WGEN"].map(v =>
+          h("option", { key: v, value: v }, v)
+        )
+      )
+    ),
+
+    // 测量结果
+    h("div", { className: "panel" },
+      h("div", { className: "panel-title" }, "测量"),
+      ["freq", "vpp", "vavg", "vrms", "vmax", "vmin", "period", "rise_time"].map(key => {
+        const labels = { freq: "频率", vpp: "峰峰值", vavg: "平均值", vrms: "有效值", vmax: "最大值", vmin: "最小值", period: "周期", rise_time: "上升时间" };
+        const units = { freq: "Hz", vpp: "V", vavg: "V", vrms: "V", vmax: "V", vmin: "V", period: "s", rise_time: "s" };
+        return h("div", { className: "measure-row", key },
+          h("span", { className: "measure-label" }, labels[key]),
+          h("span", { className: "measure-value" }, formatVal(measurements[key]) + (units[key] ? " " + units[key] : ""))
+        );
+      }),
+      h("button", { style: { width: "100%", marginTop: 6 }, onClick: () => { if (scopeConnected) send({ type: "measure" }); }, disabled: !scopeConnected }, "刷新测量")
+    )
+  );
+}
+
 // === App 组件 ===
 function App() {
   const {
