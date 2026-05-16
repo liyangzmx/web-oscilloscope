@@ -402,6 +402,112 @@ function Sidebar({ scopeConnected, channels, setChannels, timebase, setTimebase,
   );
 }
 
+// === 波形显示区 ===
+function WaveformArea({ scopeConnected, send, on }) {
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+  const waveDataRef = useRef({ 1: { x: [], y: [] }, 2: { x: [], y: [] }, 3: { x: [], y: [] }, 4: { x: [], y: [] } });
+  const fpsRef = useRef(0);
+  const lastFrameRef = useRef(Date.now());
+  const pollingRef = useRef(null);
+
+  // 初始化 ECharts
+  useEffect(() => {
+    const dom = document.getElementById("chart");
+    chartInstance.current = echarts.init(dom, null, { renderer: "canvas" });
+    chartInstance.current.setOption({
+      backgroundColor: "#000",
+      textStyle: { color: "#e6edf3" },
+      grid: { left: 60, right: 16, top: 12, bottom: 40 },
+      xAxis: {
+        type: "value",
+        axisLine: { lineStyle: { color: "#30363d" } },
+        axisLabel: { color: "#8b949e", fontSize: 10, formatter: (v) => formatEng(v, "s") },
+        splitLine: { lineStyle: { color: "#161b22" } },
+      },
+      yAxis: {
+        type: "value",
+        axisLine: { lineStyle: { color: "#30363d" } },
+        axisLabel: { color: "#8b949e", fontSize: 10 },
+        splitLine: { lineStyle: { color: "#161b22" } },
+      },
+      animation: false,
+      series: [
+        { name: "CH1", type: "line", data: [], lineStyle: { color: "#ffd700", width: 1.5 }, showSymbol: false, silent: true },
+        { name: "CH2", type: "line", data: [], lineStyle: { color: "#00ff88", width: 1.5 }, showSymbol: false, silent: true },
+        { name: "CH3", type: "line", data: [], lineStyle: { color: "#ff6b9d", width: 1.5 }, showSymbol: false, silent: true },
+        { name: "CH4", type: "line", data: [], lineStyle: { color: "#4da6ff", width: 1.5 }, showSymbol: false, silent: true },
+      ],
+    });
+
+    const handleResize = () => chartInstance.current?.resize();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      chartInstance.current?.dispose();
+    };
+  }, []);
+
+  // 监听波形数据
+  useEffect(() => {
+    const unsubs = [];
+    unsubs.push(on("waveform_data", (msg) => {
+      if (msg.x && msg.y) {
+        const data = msg.x.map((xi, i) => [xi, msg.y[i]]);
+        waveDataRef.current[msg.channel] = { x: msg.x, y: msg.y };
+        if (chartInstance.current) {
+          chartInstance.current.setOption({
+            series: [{ id: msg.channel - 1, data }],
+          }, { replaceMerge: ["series"] });
+        }
+        // FPS 计算
+        const now = Date.now();
+        fpsRef.current = Math.round(1000 / (now - lastFrameRef.current));
+        lastFrameRef.current = now;
+      }
+    }));
+    return () => unsubs.forEach(fn => fn());
+  }, [on]);
+
+  // 波形轮询
+  useEffect(() => {
+    if (scopeConnected) {
+      const fetchWave = () => {
+        [1, 2].forEach(ch => {
+          send({ type: "waveform", channel: ch });
+        });
+      };
+      fetchWave();
+      pollingRef.current = setInterval(fetchWave, 100); // ~10fps
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [scopeConnected, send]);
+
+  return h("div", { className: "waveform-area" },
+    h("div", { id: "chart", style: { width: "100%", height: "100%" } })
+  );
+}
+
+function formatEng(v, unit) {
+  if (Math.abs(v) >= 1) return v.toFixed(4).replace(/0+$/, "").replace(/\.$/, "") + " " + unit;
+  if (Math.abs(v) >= 1e-3) return (v * 1e3).toFixed(2) + " m" + unit;
+  if (Math.abs(v) >= 1e-6) return (v * 1e6).toFixed(1) + " u" + unit;
+  if (Math.abs(v) >= 1e-9) return (v * 1e9).toFixed(1) + " n" + unit;
+  return v.toExponential(1) + " " + unit;
+}
+
+// === 底部栏 ===
+function BottomBar({ wsConnected, scopeConnected, fps }) {
+  return h("div", { className: "bottombar" },
+    h("span", null, `WebSocket: ${wsConnected ? "已连接" : "断开"}`),
+    h("span", null, `示波器: ${scopeConnected ? "已连接" : "未连接"}`),
+    h("span", null, `FPS: ${fps}`),
+    h("span", { style: { marginLeft: "auto" } }, "Keysight MSOX3024T 控制面板")
+  );
+}
+
 // === App 组件 ===
 function App() {
   const {
