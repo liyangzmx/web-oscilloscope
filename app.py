@@ -414,6 +414,19 @@ app = web.Application()
 app.router.add_get("/", handle_index)
 app.router.add_get("/ws", handle_ws)
 
+async def reconnect_task():
+    """后台重连任务：断开后每 3 秒尝试重连"""
+    while True:
+        await asyncio.sleep(3)
+        if not connected and scope_ip:
+            print(f"尝试重连 {scope_ip}...")
+            ok, info = await asyncio.to_thread(scope_connect, scope_ip)
+            if ok:
+                print(f"重连成功: {info}")
+                await broadcast({"type": "connected", "ip": scope_ip, "idn": info})
+
+
 if __name__ == "__main__":
     print(f"示波器控制服务启动: http://localhost:{PORT}")
+    app.on_startup.append(lambda _: asyncio.create_task(reconnect_task()))
     web.run_app(app, host=HOST, port=PORT)
