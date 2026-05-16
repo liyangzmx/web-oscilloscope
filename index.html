@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>示波器控制面板</title>
+<style>
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --bg-waveform: #000000;
+  --border: #30363d;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --ch1: #ffd700;
+  --ch2: #00ff88;
+  --ch3: #ff6b9d;
+  --ch4: #4da6ff;
+  --danger: #f85149;
+  --success: #3fb950;
+  --warning: #d29922;
+  --accent: #1f6feb;
+  --radius: 6px;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  height: 100vh;
+  overflow: hidden;
+}
+#root { height: 100vh; display: flex; flex-direction: column; }
+
+/* 顶部栏 */
+.topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  min-height: 44px;
+  flex-shrink: 0;
+}
+.topbar .status-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--danger);
+  flex-shrink: 0;
+}
+.topbar .status-dot.connected { background: var(--success); }
+.topbar select {
+  background: var(--bg-tertiary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 4px 8px; font-size: 12px; min-width: 160px;
+}
+.topbar button {
+  background: var(--bg-tertiary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 5px 14px; font-size: 12px; cursor: pointer;
+}
+.topbar button:hover { background: var(--border); }
+.topbar button.accent { background: var(--accent); border-color: var(--accent); }
+
+/* 主布局 */
+.main {
+  display: flex; flex: 1; overflow: hidden;
+}
+
+/* 侧边栏 */
+.sidebar {
+  width: 240px; flex-shrink: 0;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.panel {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+}
+.panel-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  color: var(--text-secondary); letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.panel label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; }
+.panel select, .panel input {
+  width: 100%;
+  background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 3px;
+  padding: 4px 6px; font-size: 12px; margin-bottom: 6px;
+}
+.panel input[type="range"] { accent-color: var(--accent); }
+.ch-toggle {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+}
+.ch-toggle button {
+  padding: 3px 10px; border-radius: 3px;
+  border: 1px solid var(--border); font-size: 11px; cursor: pointer;
+  background: var(--bg-tertiary); color: var(--text-primary);
+}
+.ch-toggle button.on { background: var(--ch1); color: #000; border-color: var(--ch1); }
+.ch-toggle button.on.ch2 { background: var(--ch2); color: #000; border-color: var(--ch2); }
+.ch-toggle button.on.ch3 { background: var(--ch3); color: #000; border-color: var(--ch3); }
+.ch-toggle button.on.ch4 { background: var(--ch4); color: #000; border-color: var(--ch4); }
+
+/* 测量值 */
+.measure-value {
+  font-family: var(--font-mono);
+  font-size: 14px; color: var(--text-primary);
+  text-align: right;
+}
+.measure-label { font-size: 10px; color: var(--text-secondary); }
+.measure-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 4px;
+}
+
+/* 波形区 */
+.waveform-area {
+  flex: 1; display: flex; flex-direction: column;
+  background: var(--bg-waveform);
+  position: relative;
+}
+.waveform-area #chart {
+  flex: 1;
+}
+
+/* 底部栏 */
+.bottombar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 4px 16px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  min-height: 28px; flex-shrink: 0;
+  font-size: 11px; color: var(--text-secondary);
+}
+
+/* 扫描弹窗 */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px; padding: 20px;
+  min-width: 400px; max-width: 500px;
+}
+.modal h2 { font-size: 16px; margin-bottom: 12px; }
+.modal .device-item {
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 6px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.modal .device-item:hover { background: var(--bg-tertiary); }
+.modal .device-item .connect-btn {
+  padding: 3px 12px; background: var(--accent); border: none;
+  border-radius: 3px; color: #fff; cursor: pointer; font-size: 12px;
+}
+
+/* 预设立弹窗 */
+.preset-modal input {
+  width: 100%;
+  background: var(--bg-tertiary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px; font-size: 13px; margin: 8px 0;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+<script>
+// React 应用将在后续任务中在此处实现
+</script>
+</body>
+</html>
