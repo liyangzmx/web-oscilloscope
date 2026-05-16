@@ -499,28 +499,20 @@ function Sidebar({ scopeConnected, channels, setChannels, timebase, setTimebase,
 }
 
 // === 波形显示区 ===
-function WaveformArea({ scopeConnected, send, on, testMode }) {
-  console.log("WaveformArea render, testMode:", testMode);
+function WaveformArea({ scopeConnected, send, on, testMode, channels }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
   const fpsRef = useRef(0);
   const lastFrameRef = useRef(Date.now());
-  const pollingRef = useRef(null);
+  const mockPollingRef = useRef(null);
+  const backendPollingRef = useRef(null);
   const phaseRef = useRef(0);
 
   // 初始化 ECharts
   useEffect(() => {
-    console.log("=== WaveformArea mount ===");
-    console.log("echarts defined:", typeof echarts !== "undefined");
     const dom = document.getElementById("chart");
-    console.log("chart dom:", dom);
-    console.log("chart dom size:", dom?.offsetWidth, dom?.offsetHeight);
-    if (!dom || typeof echarts === "undefined") {
-      console.error("ECharts 未加载或 chart 元素不存在");
-      return;
-    }
+    if (!dom || typeof echarts === "undefined") return;
     chartInstance.current = echarts.init(dom, null, { renderer: "canvas" });
-    console.log("echarts instance created:", !!chartInstance.current);
     chartInstance.current.setOption({
       backgroundColor: "#000",
       textStyle: { color: "#e6edf3" },
@@ -541,10 +533,14 @@ function WaveformArea({ scopeConnected, send, on, testMode }) {
       },
       animation: false,
       series: [
-        { name: "CH1", type: "line", data: [], lineStyle: { color: "#ffd700", width: 1.5 }, showSymbol: false, silent: true },
-        { name: "CH2", type: "line", data: [], lineStyle: { color: "#00ff88", width: 1.5 }, showSymbol: false, silent: true },
-        { name: "CH3", type: "line", data: [], lineStyle: { color: "#ff6b9d", width: 1.5 }, showSymbol: false, silent: true },
-        { name: "CH4", type: "line", data: [], lineStyle: { color: "#4da6ff", width: 1.5 }, showSymbol: false, silent: true },
+        { name: "CH1", type: "line", data: (function() {
+            const d = [];
+            for (let i = 0; i < 200; i++) { const t = -0.005 + 0.01 * i / 200; d.push([t, Math.sin(2*Math.PI*1000*t)*2.5]); }
+            return d;
+          })(), lineStyle: { color: "#ffd700", width: 1.5 }, showSymbol: false },
+        { name: "CH2", type: "line", data: [], lineStyle: { color: "#00ff88", width: 1.5 }, showSymbol: false },
+        { name: "CH3", type: "line", data: [], lineStyle: { color: "#ff6b9d", width: 1.5 }, showSymbol: false },
+        { name: "CH4", type: "line", data: [], lineStyle: { color: "#4da6ff", width: 1.5 }, showSymbol: false },
       ],
     });
 
@@ -576,35 +572,27 @@ function WaveformArea({ scopeConnected, send, on, testMode }) {
 
   // 模拟轮询
   useEffect(() => {
-    console.log("testMode changed:", testMode);
     if (!testMode) return;
-    console.log("starting mock waveform loop");
     phaseRef.current = 0;
     let frameIdx = 0;
     const tick = () => {
       phaseRef.current = frameIdx * 0.08;
       if (chartInstance.current) {
-        const d1 = genMock(1);
-        const d2 = genMock(2);
-        console.log(`tick ${frameIdx}: CH1 points=${d1.length}, CH2 points=${d2.length}, chart=${!!chartInstance.current}`);
-        chartInstance.current.setOption({
-          series: [
-            { id: 0, data: d1 },
-            { id: 1, data: d2 },
-          ],
-        }, { replaceMerge: ["series"] });
+        const seriesUpdate = [];
+        for (let ch = 1; ch <= 4; ch++) {
+          seriesUpdate.push({ data: channels && channels[ch] && channels[ch].on ? genMock(ch) : [] });
+        }
+        chartInstance.current.setOption({ series: seriesUpdate });
         const now = Date.now();
         fpsRef.current = Math.round(1000 / (now - lastFrameRef.current));
         lastFrameRef.current = now;
-      } else {
-        console.log("tick skipped: no chart instance");
       }
       frameIdx++;
     };
     tick();
-    pollingRef.current = setInterval(tick, 100);
-    return () => { console.log("cleaning up mock loop"); if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [testMode]);
+    mockPollingRef.current = setInterval(tick, 100);
+    return () => { if (mockPollingRef.current) clearInterval(mockPollingRef.current); };
+  }, [testMode, channels]);
 
   // 监听后端波形数据（非模拟模式）
   useEffect(() => {
@@ -630,8 +618,8 @@ function WaveformArea({ scopeConnected, send, on, testMode }) {
       [1, 2].forEach(ch => send({ type: "waveform", channel: ch }));
     };
     fetchWave();
-    pollingRef.current = setInterval(fetchWave, 100);
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+    backendPollingRef.current = setInterval(fetchWave, 100);
+    return () => { if (backendPollingRef.current) clearInterval(backendPollingRef.current); };
   }, [send, testMode]);
 
   return h("div", { className: "waveform-area" },
@@ -698,7 +686,7 @@ function App() {
     h(TopBar, { wsConnected, scopeConnected, scopeInfo, scanning, showScan, setShowScan, devices, send, presets, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad, testMode, setTestMode }),
     h("div", { className: "main" },
       h(Sidebar, { scopeConnected, channels, setChannels, timebase, setTimebase, trigger, setTrigger, measurements, presets, send, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad }),
-      h(WaveformArea, { wsConnected, scopeConnected, send, on, testMode })
+      h(WaveformArea, { wsConnected, scopeConnected, send, on, testMode, channels })
     ),
     h(BottomBar, { wsConnected, scopeConnected, fps })
   );
