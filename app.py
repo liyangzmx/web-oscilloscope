@@ -199,6 +199,50 @@ def acquire_waveform(channel=1):
     return {"x": x, "y": y}
 
 
+def acquire_capture():
+    """抓取示波器屏幕截图，返回 base64 PNG"""
+    import base64
+    scope_send(":DISPlay:DATA? PNG")
+    # 读取二进制数据 (#<n><len><data>\n 格式)
+    scope_socket.settimeout(5)
+    while scope_socket.recv(1) != b"#":
+        pass
+    ndigits = int(scope_socket.recv(1).decode())
+    data_len = int(scope_socket.recv(ndigits).decode())
+    raw = b""
+    remaining = data_len
+    while remaining > 0:
+        chunk = scope_socket.recv(min(remaining, 65536))
+        if not chunk:
+            break
+        raw += chunk
+        remaining -= len(chunk)
+    scope_socket.recv(1)  # 结尾 \n
+    return base64.b64encode(raw).decode()
+
+
+def acquire_measurements():
+    """获取常用自动测量值"""
+    measurements = {}
+    queries = {
+        "freq": ":MEASure:FREQuency?",
+        "vpp": ":MEASure:VPP?",
+        "vavg": ":MEASure:VAVerage?",
+        "vrms": ":MEASure:VRMS?",
+        "vmax": ":MEASure:VMAX?",
+        "vmin": ":MEASure:VMIN?",
+        "period": ":MEASure:PERiod?",
+        "rise_time": ":MEASure:RISetime?",
+    }
+    for key, cmd in queries.items():
+        try:
+            val = scope_send(cmd)
+            measurements[key] = float(val)
+        except Exception:
+            measurements[key] = None
+    return measurements
+
+
 async def handle_index(request):
     """托管 index.html"""
     html_path = Path(__file__).parent / "index.html"
@@ -259,6 +303,18 @@ async def process_message(ws, msg):
             ch = msg.get("channel", 1)
             data = await asyncio.to_thread(acquire_waveform, ch)
             await ws.send_json({"type": "waveform_data", "channel": ch, "x": data["x"], "y": data["y"]})
+        elif msg_type == "capture":
+            if not connected:
+                await ws.send_json({"type": "error", "message": "示波器未连接"})
+                return
+            img_b64 = await asyncio.to_thread(acquire_capture)
+            await ws.send_json({"type": "capture", "image": img_b64})
+        elif msg_type == "measure":
+            if not connected:
+                await ws.send_json({"type": "error", "message": "示波器未连接"})
+                return
+            results = await asyncio.to_thread(acquire_measurements)
+            await ws.send_json({"type": "measure", **results})
     except Exception as e:
         await ws.send_json({"type": "error", "message": str(e)})
 
