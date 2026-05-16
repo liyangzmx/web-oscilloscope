@@ -19,6 +19,7 @@ scope_ip = None
 scope_idn = ""
 connected = False
 ws_clients = set()        # 所有 WebSocket 客户端
+MOCK_ENABLED = True       # 测试模式：示波器不在线时生成模拟波形
 
 SCOPE_PORT = 5025
 SCPI_TIMEOUT = 5.0
@@ -243,6 +244,48 @@ def acquire_measurements():
     return measurements
 
 
+# === 测试模式：生成模拟波形数据用于开发和演示 ===
+def mock_waveform(channel=1):
+    """生成模拟正弦波 / 余弦波"""
+    import random
+    num_points = 1000
+    t_start = -0.005
+    t_end = 0.005
+    x = [t_start + i * (t_end - t_start) / num_points for i in range(num_points)]
+    # 不同通道不同频率和相位
+    if channel == 1:
+        y = [math.sin(2 * math.pi * 1000 * t) * 2.5 + random.uniform(-0.05, 0.05) for t in x]
+    elif channel == 2:
+        y = [math.cos(2 * math.pi * 500 * t) * 1.5 + random.uniform(-0.05, 0.05) for t in x]
+    elif channel == 3:
+        y = [math.sin(2 * math.pi * 2000 * t) * 1.0 + random.uniform(-0.03, 0.03) for t in x]
+    else:
+        y = [random.uniform(-0.1, 0.1) for _ in x]
+    return {"x": x, "y": y}
+
+
+def mock_measurements():
+    """生成模拟测量值"""
+    return {
+        "freq": 1000000.0,
+        "vpp": 5.06,
+        "vavg": 0.002,
+        "vrms": 1.768,
+        "vmax": 2.53,
+        "vmin": -2.53,
+        "period": 1e-6,
+        "rise_time": 3.5e-8,
+    }
+
+
+def mock_capture():
+    """生成模拟截图（纯色测试图片）"""
+    import base64
+    # 最小的1x1 PNG (白色像素)
+    png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==")
+    return base64.b64encode(png).decode()
+
+
 def load_presets():
     """读取 presets.json"""
     if PRESETS_FILE.exists():
@@ -359,20 +402,30 @@ async def process_message(ws, msg):
             await ws.send_json({"type": "scpi_result", "ok": True, "result": result})
         elif msg_type == "waveform":
             if not connected:
-                await ws.send_json({"type": "error", "message": "示波器未连接"})
+                if MOCK_ENABLED:
+                    data = mock_waveform(msg.get("channel", 1))
+                    await ws.send_json({"type": "waveform_data", "channel": msg.get("channel", 1), "x": data["x"], "y": data["y"]})
+                else:
+                    await ws.send_json({"type": "error", "message": "示波器未连接"})
                 return
             ch = msg.get("channel", 1)
             data = await asyncio.to_thread(acquire_waveform, ch)
             await ws.send_json({"type": "waveform_data", "channel": ch, "x": data["x"], "y": data["y"]})
         elif msg_type == "capture":
             if not connected:
-                await ws.send_json({"type": "error", "message": "示波器未连接"})
+                if MOCK_ENABLED:
+                    await ws.send_json({"type": "capture", "image": mock_capture()})
+                else:
+                    await ws.send_json({"type": "error", "message": "示波器未连接"})
                 return
             img_b64 = await asyncio.to_thread(acquire_capture)
             await ws.send_json({"type": "capture", "image": img_b64})
         elif msg_type == "measure":
             if not connected:
-                await ws.send_json({"type": "error", "message": "示波器未连接"})
+                if MOCK_ENABLED:
+                    await ws.send_json({"type": "measure", **mock_measurements()})
+                else:
+                    await ws.send_json({"type": "error", "message": "示波器未连接"})
                 return
             results = await asyncio.to_thread(acquire_measurements)
             await ws.send_json({"type": "measure", **results})

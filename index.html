@@ -6,177 +6,228 @@
 <title>示波器控制面板</title>
 <style>
 :root {
-  --bg-primary: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-tertiary: #21262d;
-  --bg-waveform: #000000;
-  --border: #30363d;
-  --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --ch1: #ffd700;
-  --ch2: #00ff88;
-  --ch3: #ff6b9d;
-  --ch4: #4da6ff;
-  --danger: #f85149;
-  --success: #3fb950;
-  --warning: #d29922;
-  --accent: #1f6feb;
-  --radius: 6px;
-  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #111118;
+  --bg-tertiary: #18181f;
+  --bg-hover: #1e1e28;
+  --bg-waveform: #000;
+  --border: #252530;
+  --text-primary: #e4e4ec;
+  --text-secondary: #7a7a8a;
+  --text-muted: #4a4a58;
+  --ch1: #f5c842;
+  --ch2: #3dd68c;
+  --ch3: #e54d6d;
+  --ch4: #54a0ff;
+  --danger: #e5484d;
+  --success: #3dd68c;
+  --accent: #3b82f6;
+  --radius: 4px;
+  --radius-lg: 6px;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 12px;
   height: 100vh;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 #root { height: 100vh; display: flex; flex-direction: column; }
 
-/* 顶部栏 */
+/* === 顶部栏 === */
 .topbar {
-  display: flex; align-items: center; gap: 12px;
-  padding: 8px 16px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 16px;
+  height: 40px; flex-shrink: 0;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
-  min-height: 44px;
-  flex-shrink: 0;
 }
+.topbar .brand { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-right: 8px; letter-spacing: 0.3px; }
 .topbar .status-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: var(--danger);
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-muted);
   flex-shrink: 0;
 }
-.topbar .status-dot.connected { background: var(--success); }
-.topbar select {
-  background: var(--bg-tertiary); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 4px 8px; font-size: 12px; min-width: 160px;
-}
+.topbar .status-dot.connected { background: var(--success); box-shadow: 0 0 6px rgba(61,214,140,0.4); }
+.topbar .dev-info { font-size: 11px; color: var(--text-secondary); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar .spacer { flex: 1; }
 .topbar button {
+  height: 28px; padding: 0 12px;
   background: var(--bg-tertiary); color: var(--text-primary);
   border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 5px 14px; font-size: 12px; cursor: pointer;
+  font-size: 11px; cursor: pointer;
+  transition: background 0.15s;
+  display: inline-flex; align-items: center; gap: 4px;
 }
-.topbar button:hover { background: var(--border); }
-.topbar button.accent { background: var(--accent); border-color: var(--accent); }
-
-/* 主布局 */
-.main {
-  display: flex; flex: 1; overflow: hidden;
+.topbar button:hover { background: var(--bg-hover); }
+.topbar button.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.topbar button.accent:hover { opacity: 0.9; }
+.topbar button:disabled { opacity: 0.35; cursor: default; }
+.topbar button:disabled:hover { background: var(--bg-tertiary); }
+.topbar button.accent:disabled:hover { background: var(--accent); }
+.topbar .ws-indicator {
+  font-size: 10px; color: var(--text-muted);
+  padding: 2px 8px; border-radius: 10px; background: var(--bg-tertiary);
 }
 
-/* 侧边栏 */
+/* === 主布局 === */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* === 侧边栏 === */
 .sidebar {
-  width: 240px; flex-shrink: 0;
+  width: 220px; flex-shrink: 0;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
-  overflow-y: auto;
-  padding: 12px;
-  display: flex; flex-direction: column; gap: 10px;
+  overflow-y: auto; overflow-x: hidden;
 }
 .panel {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 10px;
+  border-bottom: 1px solid var(--border);
 }
-.panel-title {
-  font-size: 11px; font-weight: 600; text-transform: uppercase;
-  color: var(--text-secondary); letter-spacing: 0.5px;
-  margin-bottom: 8px;
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer; user-select: none;
+  transition: background 0.1s;
 }
-.panel label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; }
-.panel select, .panel input {
-  width: 100%;
+.panel-header:hover { background: var(--bg-tertiary); }
+.panel-header .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0; margin-right: 6px;
+}
+.panel-header .title {
+  font-size: 11px; font-weight: 500; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.3px;
+  flex: 1;
+}
+.panel-header .collapse-icon {
+  font-size: 10px; color: var(--text-muted);
+  transition: transform 0.15s;
+}
+.panel-header .collapse-icon.open { transform: rotate(90deg); }
+.panel-body {
+  padding: 0 12px 10px;
+  display: none;
+}
+.panel-body.open { display: block; }
+.panel-body label {
+  display: block; font-size: 10px; color: var(--text-muted);
+  margin-bottom: 2px; margin-top: 6px;
+}
+.panel-body select, .panel-body input {
+  width: 100%; height: 28px;
   background: var(--bg-primary); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 3px;
-  padding: 4px 6px; font-size: 12px; margin-bottom: 6px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0 6px; font-size: 11px;
 }
-.panel input[type="range"] { accent-color: var(--accent); }
-.ch-toggle {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+.panel-body select:focus, .panel-body input:focus {
+  outline: none; border-color: var(--accent);
 }
-.ch-toggle button {
-  padding: 3px 10px; border-radius: 3px;
-  border: 1px solid var(--border); font-size: 11px; cursor: pointer;
-  background: var(--bg-tertiary); color: var(--text-primary);
+.panel-body .toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 6px;
 }
-.ch-toggle button.on { background: var(--ch1); color: #000; border-color: var(--ch1); }
-.ch-toggle button.on.ch2 { background: var(--ch2); color: #000; border-color: var(--ch2); }
-.ch-toggle button.on.ch3 { background: var(--ch3); color: #000; border-color: var(--ch3); }
-.ch-toggle button.on.ch4 { background: var(--ch4); color: #000; border-color: var(--ch4); }
+.panel-body .toggle-btn {
+  padding: 3px 12px; border-radius: 3px;
+  border: none; font-size: 11px; cursor: pointer; font-weight: 500;
+  background: var(--bg-primary); color: var(--text-secondary);
+}
+.panel-body .toggle-btn.on { color: #000; }
 
-/* 测量值 */
-.measure-value {
-  font-family: var(--font-mono);
-  font-size: 14px; color: var(--text-primary);
-  text-align: right;
+/* === 测量面板 === */
+.measure-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
 }
-.measure-label { font-size: 10px; color: var(--text-secondary); }
-.measure-row {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: 4px;
+.measure-item {
+  display: flex; justify-content: space-between;
+  padding: 2px 0;
 }
+.measure-item .label { font-size: 10px; color: var(--text-muted); }
+.measure-item .value {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-primary); text-align: right;
+}
+.measure-refresh {
+  width: 100%; height: 26px; margin-top: 8px;
+  background: var(--bg-primary); color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  font-size: 11px; cursor: pointer;
+}
+.measure-refresh:hover { background: var(--bg-hover); }
 
-/* 波形区 */
+/* === 波形区 === */
 .waveform-area {
   flex: 1; display: flex; flex-direction: column;
   background: var(--bg-waveform);
   position: relative;
 }
-.waveform-area #chart {
-  flex: 1;
-}
+.waveform-area #chart { flex: 1; }
 
-/* 底部栏 */
+/* === 底部栏 === */
 .bottombar {
   display: flex; align-items: center; gap: 16px;
-  padding: 4px 16px;
+  height: 24px; flex-shrink: 0;
+  padding: 0 16px;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
-  min-height: 28px; flex-shrink: 0;
-  font-size: 11px; color: var(--text-secondary);
+  font-size: 10px; color: var(--text-muted);
 }
 
-/* 扫描弹窗 */
+/* === 弹窗 === */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0,0,0,0.7);
   display: flex; align-items: center; justify-content: center;
   z-index: 100;
+  backdrop-filter: blur(4px);
 }
 .modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 8px; padding: 20px;
-  min-width: 400px; max-width: 500px;
+  border-radius: var(--radius-lg); padding: 20px;
+  min-width: 380px; max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
 }
-.modal h2 { font-size: 16px; margin-bottom: 12px; }
-.modal .device-item {
-  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius);
-  margin-bottom: 6px; cursor: pointer;
-  display: flex; justify-content: space-between; align-items: center;
+.modal h2 { font-size: 14px; font-weight: 500; margin-bottom: 14px; }
+.modal .list-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border-radius: var(--radius);
+  margin-bottom: 4px;
+  transition: background 0.1s;
 }
-.modal .device-item:hover { background: var(--bg-tertiary); }
-.modal .device-item .connect-btn {
-  padding: 3px 12px; background: var(--accent); border: none;
-  border-radius: 3px; color: #fff; cursor: pointer; font-size: 12px;
+.modal .list-item:hover { background: var(--bg-tertiary); }
+.modal .list-item .desc { font-size: 10px; color: var(--text-secondary); margin-top: 1px; }
+.modal .btn-sm {
+  padding: 4px 12px; border: none; border-radius: var(--radius);
+  font-size: 11px; cursor: pointer; font-weight: 500;
 }
-
-/* 预设立弹窗 */
-.preset-modal input {
-  width: 100%;
+.modal .btn-sm.primary { background: var(--accent); color: #fff; }
+.modal .btn-sm.danger { background: var(--danger); color: #fff; }
+.modal .btn-row { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+.modal .btn-row button {
+  height: 30px; padding: 0 16px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-tertiary); color: var(--text-primary);
+  font-size: 12px; cursor: pointer;
+}
+.modal .btn-row button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.modal input[type="text"] {
+  width: 100%; height: 32px;
   background: var(--bg-tertiary); color: var(--text-primary);
   border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 8px; font-size: 13px; margin: 8px 0;
+  padding: 0 10px; font-size: 12px; margin: 8px 0;
 }
+.modal input[type="text"]:focus { outline: none; border-color: var(--accent); }
 
-/* 滚动条 */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-primary); }
+/* === 滚动条 === */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -230,15 +281,17 @@ function useWebSocket() {
 // === 顶部栏组件 ===
 function TopBar({ wsConnected, scopeConnected, scopeInfo, scanning, showScan, setShowScan, devices, send, presets, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad }) {
   return h("div", { className: "topbar" },
+    h("span", { className: "brand" }, "SCOPE"),
     h("span", { className: "status-dot" + (scopeConnected ? " connected" : ""), title: scopeConnected ? "已连接" : "未连接" }),
-    h("span", null, scopeConnected ? (scopeInfo?.idn || scopeInfo?.ip) : "未连接"),
-    h("button", { onClick: () => { setShowScan(true); send({ type: "scan" }); } }, "扫描"),
-    h("button", { className: "accent", onClick: () => send({ type: "capture" }), disabled: !scopeConnected }, "截图"),
-    h("button", { onClick: () => setShowPresetSave(true), disabled: !scopeConnected }, "保存预设"),
-    h("button", { onClick: () => { send({ type: "preset_list" }); setShowPresetLoad(true); } }, "加载预设"),
-    h("span", { style: { marginLeft: "auto", color: "var(--text-secondary)" } }, wsConnected ? "WS" : "WS 断开"),
+    h("span", { className: "dev-info" }, scopeConnected ? (scopeInfo?.idn || scopeInfo?.ip) : "未连接"),
+    h("span", { className: "spacer" }),
+    h("button", { onClick: () => { send({ type: "scan" }); setShowScan(true); } }, "扫描"),
+    h("button", { onClick: () => send({ type: "capture" }), disabled: !scopeConnected }, "截图"),
+    h("button", { onClick: () => setShowPresetSave(true), disabled: !scopeConnected }, "保存"),
+    h("button", { onClick: () => { send({ type: "preset_list" }); setShowPresetLoad(true); } }, "加载"),
+    h("span", { className: "ws-indicator" }, wsConnected ? "WS" : "断线"),
 
-    showScan && h(ScanModal, { scanning, devices, send, setShowScan, showScan }),
+    showScan && h(ScanModal, { scanning, devices, send, setShowScan }),
     showPresetSave && h(PresetSaveModal, { send, setShow: setShowPresetSave }),
     showPresetLoad && h(PresetLoadModal, { presets, send, setShow: setShowPresetLoad })
   );
@@ -248,13 +301,15 @@ function ScanModal({ scanning, devices, send, setShowScan }) {
   return h("div", { className: "modal-overlay", onClick: (e) => e.target === e.currentTarget && setShowScan(false) },
     h("div", { className: "modal" },
       h("h2", null, "扫描设备"),
-      scanning && h("p", { style: { color: "var(--text-secondary)" } }, "正在扫描 192.168.1.1~254 ..."),
-      devices.length === 0 && !scanning && h("p", { style: { color: "var(--text-secondary)" } }, "未发现 SCPI 设备"),
-      devices.map(d => h("div", { className: "device-item", key: d.ip },
-        h("div", null, h("strong", null, d.ip), h("br"), h("small", { style: { color: "var(--text-secondary)" } }, d.idn)),
-        h("button", { className: "connect-btn", onClick: () => { send({ type: "connect", ip: d.ip }); setShowScan(false); } }, "连接")
+      scanning && h("p", { style: { color: "var(--text-secondary)", fontSize: 12 } }, "正在扫描 192.168.1.1 ~ 192.168.1.254 ..."),
+      !scanning && devices.length === 0 && h("p", { style: { color: "var(--text-muted)", fontSize: 12 } }, "未发现 SCPI 设备，请确认示波器已联网"),
+      devices.map(d => h("div", { className: "list-item", key: d.ip },
+        h("div", null, h("div", { style: { fontSize: 12 } }, d.ip), h("div", { className: "desc" }, d.idn)),
+        h("button", { className: "btn-sm primary", onClick: () => { send({ type: "connect", ip: d.ip }); setShowScan(false); } }, "连接")
       )),
-      h("button", { style: { marginTop: 12, width: "100%" }, onClick: () => setShowScan(false) }, "关闭")
+      h("div", { className: "btn-row" },
+        h("button", { onClick: () => setShowScan(false) }, "关闭")
+      )
     )
   );
 }
@@ -262,11 +317,11 @@ function ScanModal({ scanning, devices, send, setShowScan }) {
 function PresetSaveModal({ send, setShow }) {
   const [name, setName] = React.useState("");
   return h("div", { className: "modal-overlay", onClick: (e) => e.target === e.currentTarget && setShow(false) },
-    h("div", { className: "modal preset-modal" },
+    h("div", { className: "modal" },
       h("h2", null, "保存预设"),
-      h("input", { placeholder: "预设名称", value: name, onChange: (e) => setName(e.target.value), autoFocus: true }),
-      h("div", { style: { display: "flex", gap: 8, marginTop: 12 } },
-        h("button", { className: "accent", onClick: () => { send({ type: "preset_save", name }); setShow(false); }, disabled: !name }, "保存"),
+      h("input", { type: "text", placeholder: "输入预设名称...", value: name, onChange: (e) => setName(e.target.value), autoFocus: true }),
+      h("div", { className: "btn-row" },
+        h("button", { className: "primary", onClick: () => { send({ type: "preset_save", name }); setShow(false); }, disabled: !name }, "保存"),
         h("button", { onClick: () => setShow(false) }, "取消")
       )
     )
@@ -277,15 +332,17 @@ function PresetLoadModal({ presets, send, setShow }) {
   return h("div", { className: "modal-overlay", onClick: (e) => e.target === e.currentTarget && setShow(false) },
     h("div", { className: "modal" },
       h("h2", null, "加载预设"),
-      presets.length === 0 && h("p", { style: { color: "var(--text-secondary)" } }, "无已保存预设"),
-      presets.map(p => h("div", { className: "device-item", key: p },
-        h("span", null, p),
+      presets.length === 0 && h("p", { style: { color: "var(--text-muted)", fontSize: 12 } }, "暂无已保存的预设"),
+      presets.map(p => h("div", { className: "list-item", key: p },
+        h("span", { style: { fontSize: 12 } }, p),
         h("div", { style: { display: "flex", gap: 6 } },
-          h("button", { className: "connect-btn", onClick: () => { send({ type: "preset_load", name: p }); setShow(false); } }, "加载"),
-          h("button", { style: { padding: "3px 8px", background: "var(--danger)", border: "none", borderRadius: 3, color: "#fff", cursor: "pointer", fontSize: 12 }, onClick: () => { send({ type: "preset_delete", name: p }); send({ type: "preset_list" }); }, title: "删除" }, "×")
+          h("button", { className: "btn-sm primary", onClick: () => { send({ type: "preset_load", name: p }); setShow(false); } }, "加载"),
+          h("button", { className: "btn-sm danger", onClick: () => { send({ type: "preset_delete", name: p }); send({ type: "preset_list" }); } }, "删除")
         )
       )),
-      h("button", { style: { marginTop: 12, width: "100%" }, onClick: () => setShow(false) }, "关闭")
+      h("div", { className: "btn-row" },
+        h("button", { onClick: () => setShow(false) }, "关闭")
+      )
     )
   );
 }
@@ -294,6 +351,13 @@ function PresetLoadModal({ presets, send, setShow }) {
 const CH_COLORS = { 1: "var(--ch1)", 2: "var(--ch2)", 3: "var(--ch3)", 4: "var(--ch4)" };
 
 function Sidebar({ scopeConnected, channels, setChannels, timebase, setTimebase, trigger, setTrigger, measurements, presets, send }) {
+  // 面板展开状态: ch1, ch2, timebase, trigger, measure
+  const [openPanels, setOpenPanels] = React.useState({ ch1: true, ch2: true, timebase: true, trigger: false, measure: false });
+
+  const togglePanel = (key) => {
+    setOpenPanels(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const updateChannel = (ch, key, value) => {
     setChannels(prev => ({ ...prev, [ch]: { ...prev[ch], [key]: value } }));
     if (scopeConnected) {
@@ -329,75 +393,103 @@ function Sidebar({ scopeConnected, channels, setChannels, timebase, setTimebase,
     return v;
   };
 
-  return h("div", { className: "sidebar" },
-    // 通道控制
-    ...[1, 2, 3, 4].map(ch =>
-      h("div", { className: "panel", key: `ch${ch}` },
-        h("div", { className: "panel-title", style: { color: CH_COLORS[ch] } }, `通道 ${ch}`),
-        h("div", { className: "ch-toggle" },
-          h("span", null, "开关"),
-          h("button", {
-            className: channels[ch].on ? `on ch${ch}` : "",
-            onClick: () => updateChannel(ch, "on", !channels[ch].on)
-          }, channels[ch].on ? "ON" : "OFF")
-        ),
-        h("label", null, "垂直档位 (V/div)"),
-        h("select", { value: channels[ch].scale, onChange: (e) => updateChannel(ch, "scale", parseFloat(e.target.value)) },
-          ["0.001", "0.002", "0.005", "0.01", "0.02", "0.05", "0.1", "0.2", "0.5", "1", "2", "5", "10"].map(v =>
-            h("option", { key: v, value: v }, v + " V")
-          )
-        ),
-        h("label", null, "偏置 (V)"),
-        h("input", { type: "number", step: 0.01, value: channels[ch].offset, onChange: (e) => updateChannel(ch, "offset", parseFloat(e.target.value) || 0) })
-      )
+  const CH_PANEL = (ch) => h("div", { className: "panel", key: `ch${ch}` },
+    h("div", { className: "panel-header", onClick: () => togglePanel(`ch${ch}`) },
+      h("span", { className: "dot", style: { background: channels[ch].on ? CH_COLORS[ch] : "var(--text-muted)" } }),
+      h("span", { className: "title" }, `通道 ${ch}`),
+      h("span", { className: "collapse-icon" + (openPanels[`ch${ch}`] ? " open" : "") }, "▶")
     ),
+    h("div", { className: "panel-body" + (openPanels[`ch${ch}`] ? " open" : "") },
+      h("div", { className: "toggle-row" },
+        h("span", { style: { fontSize: 10, color: "var(--text-muted)" } }, "开关"),
+        h("button", {
+          className: "toggle-btn" + (channels[ch].on ? " on" : ""),
+          style: channels[ch].on ? { background: CH_COLORS[ch] } : {},
+          onClick: (e) => { e.stopPropagation(); updateChannel(ch, "on", !channels[ch].on); }
+        }, channels[ch].on ? "ON" : "OFF")
+      ),
+      h("label", null, "档位 (V/div)"),
+      h("select", { value: channels[ch].scale, onChange: (e) => updateChannel(ch, "scale", parseFloat(e.target.value)) },
+        ["0.001","0.002","0.005","0.01","0.02","0.05","0.1","0.2","0.5","1","2","5","10"].map(v =>
+          h("option", { key: v, value: v }, v + "V")
+        )
+      ),
+      h("label", null, "偏置 (V)"),
+      h("input", { type: "number", step: 0.01, value: channels[ch].offset, onChange: (e) => updateChannel(ch, "offset", parseFloat(e.target.value) || 0) })
+    )
+  );
+
+  return h("div", { className: "sidebar" },
+    CH_PANEL(1), CH_PANEL(2), CH_PANEL(3), CH_PANEL(4),
 
     // 时基控制
     h("div", { className: "panel" },
-      h("div", { className: "panel-title" }, "时基"),
-      h("label", null, "时间档位 (s/div)"),
-      h("select", { value: timebase.scale, onChange: (e) => updateTimebase("scale", parseFloat(e.target.value)) },
-        ["1e-9", "2e-9", "5e-9", "1e-8", "2e-8", "5e-8", "1e-7", "2e-7", "5e-7",
-         "1e-6", "2e-6", "5e-6", "1e-5", "2e-5", "5e-5", "1e-4", "2e-4", "5e-4",
-         "1e-3", "2e-3", "5e-3", "1e-2", "2e-2", "5e-2", "1e-1", "2e-1", "5e-1", "1"].map(v =>
-          h("option", { key: v, value: v }, formatVal(parseFloat(v)) + "s")
-        )
+      h("div", { className: "panel-header", onClick: () => togglePanel("timebase") },
+        h("span", { className: "dot", style: { background: "var(--text-muted)" } }),
+        h("span", { className: "title" }, "时基"),
+        h("span", { className: "collapse-icon" + (openPanels.timebase ? " open" : "") }, "▶")
       ),
-      h("label", null, "水平偏移 (s)"),
-      h("input", { type: "number", step: 1e-6, value: timebase.offset, onChange: (e) => updateTimebase("offset", parseFloat(e.target.value) || 0) })
+      h("div", { className: "panel-body" + (openPanels.timebase ? " open" : "") },
+        h("label", null, "时间档位 (s/div)"),
+        h("select", { value: timebase.scale, onChange: (e) => updateTimebase("scale", parseFloat(e.target.value)) },
+          ["1e-9","2e-9","5e-9","1e-8","2e-8","5e-8","1e-7","2e-7","5e-7",
+           "1e-6","2e-6","5e-6","1e-5","2e-5","5e-5","1e-4","2e-4","5e-4",
+           "1e-3","2e-3","5e-3","1e-2","2e-2","5e-2","1e-1","2e-1","5e-1","1"].map(v =>
+            h("option", { key: v, value: v }, formatVal(parseFloat(v)) + "s")
+          )
+        ),
+        h("label", null, "水平偏移 (s)"),
+        h("input", { type: "number", step: 1e-6, value: timebase.offset, onChange: (e) => updateTimebase("offset", parseFloat(e.target.value) || 0) })
+      )
     ),
 
     // 触发控制
     h("div", { className: "panel" },
-      h("div", { className: "panel-title" }, "触发"),
-      h("label", null, "触发电平 (V)"),
-      h("input", { type: "number", step: 0.01, value: trigger.level, onChange: (e) => updateTrigger("level", parseFloat(e.target.value) || 0) }),
-      h("label", null, "触发模式"),
-      h("select", { value: trigger.mode, onChange: (e) => updateTrigger("mode", e.target.value) },
-        ["EDGE", "GLITch", "PATTern", "TV", "DELay", "EBURst", "OR", "SHOLd", "SBUS"].map(v =>
-          h("option", { key: v, value: v }, v)
-        )
+      h("div", { className: "panel-header", onClick: () => togglePanel("trigger") },
+        h("span", { className: "dot", style: { background: trigger.level !== 0 ? "var(--warning)" : "var(--text-muted)" } }),
+        h("span", { className: "title" }, "触发"),
+        h("span", { className: "collapse-icon" + (openPanels.trigger ? " open" : "") }, "▶")
       ),
-      h("label", null, "触发源"),
-      h("select", { value: trigger.source, onChange: (e) => updateTrigger("source", e.target.value) },
-        ["CHAN1", "CHAN2", "CHAN3", "CHAN4", "EXT", "LINE", "WGEN"].map(v =>
-          h("option", { key: v, value: v }, v)
+      h("div", { className: "panel-body" + (openPanels.trigger ? " open" : "") },
+        h("label", null, "电平 (V)"),
+        h("input", { type: "number", step: 0.01, value: trigger.level, onChange: (e) => updateTrigger("level", parseFloat(e.target.value) || 0) }),
+        h("label", null, "模式"),
+        h("select", { value: trigger.mode, onChange: (e) => updateTrigger("mode", e.target.value) },
+          ["EDGE","GLITch","PATTern","TV","DELay","EBURst","OR","SHOLd","SBUS"].map(v =>
+            h("option", { key: v, value: v }, v)
+          )
+        ),
+        h("label", null, "源"),
+        h("select", { value: trigger.source, onChange: (e) => updateTrigger("source", e.target.value) },
+          ["CHAN1","CHAN2","CHAN3","CHAN4","EXT","LINE","WGEN"].map(v =>
+            h("option", { key: v, value: v }, v)
+          )
         )
       )
     ),
 
     // 测量结果
     h("div", { className: "panel" },
-      h("div", { className: "panel-title" }, "测量"),
-      ["freq", "vpp", "vavg", "vrms", "vmax", "vmin", "period", "rise_time"].map(key => {
-        const labels = { freq: "频率", vpp: "峰峰值", vavg: "平均值", vrms: "有效值", vmax: "最大值", vmin: "最小值", period: "周期", rise_time: "上升时间" };
-        const units = { freq: "Hz", vpp: "V", vavg: "V", vrms: "V", vmax: "V", vmin: "V", period: "s", rise_time: "s" };
-        return h("div", { className: "measure-row", key },
-          h("span", { className: "measure-label" }, labels[key]),
-          h("span", { className: "measure-value" }, formatVal(measurements[key]) + (units[key] ? " " + units[key] : ""))
-        );
-      }),
-      h("button", { style: { width: "100%", marginTop: 6 }, onClick: () => { if (scopeConnected) send({ type: "measure" }); }, disabled: !scopeConnected }, "刷新测量")
+      h("div", { className: "panel-header", onClick: () => togglePanel("measure") },
+        h("span", { className: "dot", style: { background: measurements.freq ? "var(--success)" : "var(--text-muted)" } }),
+        h("span", { className: "title" }, "测量"),
+        h("span", { className: "collapse-icon" + (openPanels.measure ? " open" : "") }, "▶")
+      ),
+      h("div", { className: "panel-body" + (openPanels.measure ? " open" : "") },
+        h("div", { className: "measure-grid" },
+          ...[
+            ["freq","频率","Hz"],["vpp","峰峰值","V"],["vavg","平均值","V"],
+            ["vrms","有效值","V"],["vmax","最大值","V"],["vmin","最小值","V"],
+            ["period","周期","s"],["rise_time","上升时间","s"]
+          ].map(([key, label, unit]) =>
+            h("div", { className: "measure-item", key },
+              h("span", { className: "label" }, label),
+              h("span", { className: "value" }, formatVal(measurements[key]) + (measurements[key] != null ? " " + unit : ""))
+            )
+          )
+        ),
+        h("button", { className: "measure-refresh", onClick: () => { if (scopeConnected) send({ type: "measure" }); }, disabled: !scopeConnected }, "刷新")
+      )
     )
   );
 }
@@ -469,21 +561,19 @@ function WaveformArea({ scopeConnected, send, on }) {
     return () => unsubs.forEach(fn => fn());
   }, [on]);
 
-  // 波形轮询
+  // 波形轮询（连接后始终轮询，后端做 mock 降级）
   useEffect(() => {
-    if (scopeConnected) {
-      const fetchWave = () => {
-        [1, 2].forEach(ch => {
-          send({ type: "waveform", channel: ch });
-        });
-      };
-      fetchWave();
-      pollingRef.current = setInterval(fetchWave, 100); // ~10fps
-    }
+    const fetchWave = () => {
+      [1, 2].forEach(ch => {
+        send({ type: "waveform", channel: ch });
+      });
+    };
+    fetchWave();
+    pollingRef.current = setInterval(fetchWave, 100);
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [scopeConnected, send]);
+  }, [send]);
 
   return h("div", { className: "waveform-area" },
     h("div", { id: "chart", style: { width: "100%", height: "100%" } })
@@ -501,10 +591,10 @@ function formatEng(v, unit) {
 // === 底部栏 ===
 function BottomBar({ wsConnected, scopeConnected, fps }) {
   return h("div", { className: "bottombar" },
-    h("span", null, `WebSocket: ${wsConnected ? "已连接" : "断开"}`),
-    h("span", null, `示波器: ${scopeConnected ? "已连接" : "未连接"}`),
-    h("span", null, `FPS: ${fps}`),
-    h("span", { style: { marginLeft: "auto" } }, "Keysight MSOX3024T 控制面板")
+    h("span", null, `WS ${wsConnected ? "ON" : "OFF"}`),
+    h("span", null, `示波器 ${scopeConnected ? "ON" : "OFF"}`),
+    h("span", null, fps > 0 ? `${fps} fps` : ""),
+    h("span", { style: { marginLeft: "auto" } }, "v1.0")
   );
 }
 
