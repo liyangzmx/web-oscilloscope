@@ -143,6 +143,62 @@ def scan_for_devices(base_ip=None):
     return devices
 
 
+def waveform_to_xy(raw_bytes, preamble):
+    """将二进制波形数据转换为 X, Y 数组"""
+    # preamble: x_increment, x_origin, x_reference, y_increment, y_origin, y_reference
+    x_inc, x_org, x_ref = preamble["x_increment"], preamble["x_origin"], preamble["x_reference"]
+    y_inc, y_org, y_ref = preamble["y_increment"], preamble["y_origin"], preamble["y_reference"]
+    points = len(raw_bytes)
+    x = [(i * x_inc + x_org - x_ref * x_inc) for i in range(points)]
+    y = [(raw_bytes[i] * y_inc + y_org - y_ref * y_inc) for i in range(points)]
+    return x, y
+
+
+def get_preamble(channel=1):
+    """获取波形前导信息"""
+    scope_send(f":WAVeform:SOURce CHAN{channel}")
+    # 读取 preamble 各字段
+    preamble = {}
+    preamble["x_increment"] = float(scope_send(":WAVeform:XINCrement?"))
+    preamble["x_origin"] = float(scope_send(":WAVeform:XORigin?"))
+    preamble["x_reference"] = float(scope_send(":WAVeform:XREFerence?"))
+    preamble["y_increment"] = float(scope_send(":WAVeform:YINCrement?"))
+    preamble["y_origin"] = float(scope_send(":WAVeform:YORigin?"))
+    preamble["y_reference"] = float(scope_send(":WAVeform:YREFerence?"))
+    return preamble
+
+
+def acquire_waveform(channel=1):
+    """采集单通道波形，返回 {x: [...], y: [...]}"""
+    scope_send(f":WAVeform:SOURce CHAN{channel}")
+    scope_send(":WAVeform:FORMat BYTE")        # 二进制模式
+    scope_send(":WAVeform:POINts:MODE RAW")    # 原始数据
+    preamble = get_preamble(channel)
+    # 读取波形数据
+    scope_socket.sendall(b":WAVeform:DATA?\n")
+    # 读取 #<n><len> 头部
+    scope_socket.settimeout(5)
+    header = b""
+    while True:
+        c = scope_socket.recv(1)
+        if c == b"#":
+            ndigits = int(scope_socket.recv(1).decode())
+            data_len = int(scope_socket.recv(ndigits).decode())
+            break
+    # 读取数据体 + 结尾换行
+    raw = b""
+    remaining = data_len
+    while remaining > 0:
+        chunk = scope_socket.recv(min(remaining, 65536))
+        if not chunk:
+            break
+        raw += chunk
+        remaining -= len(chunk)
+    scope_socket.recv(1)  # 吃掉结尾 \n
+    x, y = waveform_to_xy(raw, preamble)
+    return {"x": x, "y": y}
+
+
 async def handle_index(request):
     """托管 index.html"""
     html_path = Path(__file__).parent / "index.html"
@@ -196,6 +252,13 @@ async def process_message(ws, msg):
                 return
             result = await asyncio.to_thread(scope_send, msg["command"])
             await ws.send_json({"type": "scpi_result", "ok": True, "result": result})
+        elif msg_type == "waveform":
+            if not connected:
+                await ws.send_json({"type": "error", "message": "示波器未连接"})
+                return
+            ch = msg.get("channel", 1)
+            data = await asyncio.to_thread(acquire_waveform, ch)
+            await ws.send_json({"type": "waveform_data", "channel": ch, "x": data["x"], "y": data["y"]})
     except Exception as e:
         await ws.send_json({"type": "error", "message": str(e)})
 
