@@ -227,6 +227,69 @@ function useWebSocket() {
   return { send, on, connected, scopeConnected, scopeInfo, error, setScopeConnected, setScopeInfo, setError };
 }
 
+// === 顶部栏组件 ===
+function TopBar({ wsConnected, scopeConnected, scopeInfo, scanning, showScan, setShowScan, devices, send, presets, showPresetSave, setShowPresetSave, showPresetLoad, setShowPresetLoad }) {
+  return h("div", { className: "topbar" },
+    h("span", { className: "status-dot" + (scopeConnected ? " connected" : ""), title: scopeConnected ? "已连接" : "未连接" }),
+    h("span", null, scopeConnected ? (scopeInfo?.idn || scopeInfo?.ip) : "未连接"),
+    h("button", { onClick: () => { setShowScan(true); send({ type: "scan" }); } }, "扫描"),
+    h("button", { className: "accent", onClick: () => send({ type: "capture" }), disabled: !scopeConnected }, "截图"),
+    h("button", { onClick: () => setShowPresetSave(true), disabled: !scopeConnected }, "保存预设"),
+    h("button", { onClick: () => { send({ type: "preset_list" }); setShowPresetLoad(true); } }, "加载预设"),
+    h("span", { style: { marginLeft: "auto", color: "var(--text-secondary)" } }, wsConnected ? "WS" : "WS 断开"),
+
+    showScan && h(ScanModal, { scanning, devices, send, setShowScan, showScan }),
+    showPresetSave && h(PresetSaveModal, { send, setShow: setShowPresetSave }),
+    showPresetLoad && h(PresetLoadModal, { presets, send, setShow: setShowPresetLoad })
+  );
+}
+
+function ScanModal({ scanning, devices, send, setShowScan }) {
+  return h("div", { className: "modal-overlay", onClick: (e) => e.target === e.currentTarget && setShowScan(false) },
+    h("div", { className: "modal" },
+      h("h2", null, "扫描设备"),
+      scanning && h("p", { style: { color: "var(--text-secondary)" } }, "正在扫描 192.168.1.1~254 ..."),
+      devices.length === 0 && !scanning && h("p", { style: { color: "var(--text-secondary)" } }, "未发现 SCPI 设备"),
+      devices.map(d => h("div", { className: "device-item", key: d.ip },
+        h("div", null, h("strong", null, d.ip), h("br"), h("small", { style: { color: "var(--text-secondary)" } }, d.idn)),
+        h("button", { className: "connect-btn", onClick: () => { send({ type: "connect", ip: d.ip }); setShowScan(false); } }, "连接")
+      )),
+      h("button", { style: { marginTop: 12, width: "100%" }, onClick: () => setShowScan(false) }, "关闭")
+    )
+  );
+}
+
+function PresetSaveModal({ send, setShow }) {
+  const [name, setName] = React.useState("");
+  return h("div", { className: "modal-overlay", onClick: (e) => e.target === e.currentTarget && setShow(false) },
+    h("div", { className: "modal preset-modal" },
+      h("h2", null, "保存预设"),
+      h("input", { placeholder: "预设名称", value: name, onChange: (e) => setName(e.target.value), autoFocus: true }),
+      h("div", { style: { display: "flex", gap: 8, marginTop: 12 } },
+        h("button", { className: "accent", onClick: () => { send({ type: "preset_save", name }); setShow(false); }, disabled: !name }, "保存"),
+        h("button", { onClick: () => setShow(false) }, "取消")
+      )
+    )
+  );
+}
+
+function PresetLoadModal({ presets, send, setShow }) {
+  return h("div", { className: "modal-overlay", onClick: (e) => e.target === e.currentTarget && setShow(false) },
+    h("div", { className: "modal" },
+      h("h2", null, "加载预设"),
+      presets.length === 0 && h("p", { style: { color: "var(--text-secondary)" } }, "无已保存预设"),
+      presets.map(p => h("div", { className: "device-item", key: p },
+        h("span", null, p),
+        h("div", { style: { display: "flex", gap: 6 } },
+          h("button", { className: "connect-btn", onClick: () => { send({ type: "preset_load", name: p }); setShow(false); } }, "加载"),
+          h("button", { style: { padding: "3px 8px", background: "var(--danger)", border: "none", borderRadius: 3, color: "#fff", cursor: "pointer", fontSize: 12 }, onClick: () => { send({ type: "preset_delete", name: p }); send({ type: "preset_list" }); }, title: "删除" }, "×")
+        )
+      )),
+      h("button", { style: { marginTop: 12, width: "100%" }, onClick: () => setShow(false) }, "关闭")
+    )
+  );
+}
+
 // === App 组件 ===
 function App() {
   const {
