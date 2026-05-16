@@ -243,6 +243,67 @@ def acquire_measurements():
     return measurements
 
 
+def load_presets():
+    """读取 presets.json"""
+    if PRESETS_FILE.exists():
+        with open(PRESETS_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def save_presets(presets):
+    """写入 presets.json"""
+    with open(PRESETS_FILE, "w") as f:
+        json.dump(presets, f, indent=2, ensure_ascii=False)
+
+
+def collect_current_settings():
+    """采集当前示波器所有设置，返回设置字典"""
+    settings = {}
+    for ch in range(1, 5):
+        try:
+            disp = scope_send(f":CHANnel{ch}:DISPlay?").strip()
+            scale = scope_send(f":CHANnel{ch}:SCALe?").strip()
+            offset = scope_send(f":CHANnel{ch}:OFFSet?").strip()
+            settings[f"ch{ch}_display"] = disp
+            settings[f"ch{ch}_scale"] = scale
+            settings[f"ch{ch}_offset"] = offset
+        except Exception:
+            pass
+    try:
+        settings["timebase_scale"] = scope_send(":TIMebase:SCALe?").strip()
+        settings["trigger_level"] = scope_send(":TRIGger:LEVel?").strip()
+        settings["trigger_mode"] = scope_send(":TRIGger:MODE?").strip()
+        settings["trigger_source"] = scope_send(":TRIGger:SOURce?").strip()
+    except Exception:
+        pass
+    return settings
+
+
+def apply_settings(settings: dict):
+    """将设置字典应用到示波器"""
+    for key, val in settings.items():
+        if key.startswith("ch") and "_" in key:
+            parts = key.split("_", 1)
+            ch_num = parts[0][2]
+            cmd_name = parts[1].upper()
+            cmd = f":CHANnel{ch_num}:{cmd_name} {val}"
+        elif key == "timebase_scale":
+            cmd = f":TIMebase:SCALe {val}"
+        elif key == "trigger_level":
+            cmd = f":TRIGger:LEVel {val}"
+        elif key == "trigger_mode":
+            cmd = f":TRIGger:MODE {val}"
+        elif key == "trigger_source":
+            cmd = f":TRIGger:SOURce {val}"
+        else:
+            continue
+        try:
+            scope_send(cmd)
+        except Exception:
+            pass
+
+
 async def handle_index(request):
     """托管 index.html"""
     html_path = Path(__file__).parent / "index.html"
@@ -315,6 +376,37 @@ async def process_message(ws, msg):
                 return
             results = await asyncio.to_thread(acquire_measurements)
             await ws.send_json({"type": "measure", **results})
+        elif msg_type == "preset_save":
+            if not connected:
+                await ws.send_json({"type": "error", "message": "示波器未连接"})
+                return
+            name = msg.get("name", "未命名")
+            settings = await asyncio.to_thread(collect_current_settings)
+            presets = load_presets()
+            presets[name] = settings
+            save_presets(presets)
+            await ws.send_json({"type": "preset_saved", "name": name})
+        elif msg_type == "preset_load":
+            if not connected:
+                await ws.send_json({"type": "error", "message": "示波器未连接"})
+                return
+            name = msg.get("name", "")
+            presets = load_presets()
+            if name not in presets:
+                await ws.send_json({"type": "error", "message": f"预设 '{name}' 不存在"})
+                return
+            await asyncio.to_thread(apply_settings, presets[name])
+            await ws.send_json({"type": "preset_loaded", "name": name})
+        elif msg_type == "preset_list":
+            presets = load_presets()
+            await ws.send_json({"type": "preset_list", "presets": list(presets.keys())})
+        elif msg_type == "preset_delete":
+            name = msg.get("name", "")
+            presets = load_presets()
+            if name in presets:
+                del presets[name]
+                save_presets(presets)
+            await ws.send_json({"type": "preset_list", "presets": list(presets.keys())})
     except Exception as e:
         await ws.send_json({"type": "error", "message": str(e)})
 
