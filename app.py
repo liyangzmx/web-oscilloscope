@@ -107,6 +107,42 @@ def scope_disconnect():
     connected = False
 
 
+DEFAULT_SCAN_BASE = "192.168.1"
+
+
+def scan_for_devices(base_ip=None):
+    """同步扫描局域网 SCPI 设备，返回设备列表"""
+    if base_ip is None:
+        base_ip = DEFAULT_SCAN_BASE
+    devices = []
+    for i in range(1, 255):
+        ip = f"{base_ip}.{i}"
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(0.05)
+            sock.connect((ip, SCOPE_PORT))
+            sock.sendall(b"*IDN?\n")
+            sock.settimeout(0.1)
+            idn_data = b""
+            while True:
+                try:
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        break
+                    idn_data += chunk
+                    if chunk.endswith(b"\n"):
+                        break
+                except socket.timeout:
+                    break
+            idn = idn_data.decode().strip()
+            if idn:
+                devices.append({"ip": ip, "idn": idn})
+            sock.close()
+        except Exception:
+            pass
+    return devices
+
+
 async def handle_index(request):
     """托管 index.html"""
     html_path = Path(__file__).parent / "index.html"
@@ -139,7 +175,11 @@ async def process_message(ws, msg):
     """处理 WebSocket 消息"""
     msg_type = msg.get("type", "")
     try:
-        if msg_type == "connect":
+        if msg_type == "scan":
+            await ws.send_json({"type": "scan_start"})
+            devices = await asyncio.to_thread(scan_for_devices)
+            await ws.send_json({"type": "scan_done", "devices": devices})
+        elif msg_type == "connect":
             ip = msg.get("ip", "")
             ok, info = await asyncio.to_thread(scope_connect, ip)
             if ok:
